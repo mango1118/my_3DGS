@@ -22,9 +22,11 @@
 #  POSSIBILITY OF SUCH DAMAGE.
 
 import torch
-
+# 球谐函数0阶，基函数就是根号下（1/4pi），所以是固定值
 C0 = 0.28209479177387814
+# 1阶的系数就是根号下（3/4pi），也是固定值
 C1 = 0.4886025119029199
+# 2阶球谐函数的系数有根号下（15/4pi），有根号下（5/16pi），所以有不同的值
 C2 = [
     1.0925484305920792,
     -1.0925484305920792,
@@ -53,7 +55,7 @@ C4 = [
     0.6258357354491761,
 ]   
 
-
+# 球谐函数的计算方式，传入球谐函数的阶数，球谐函数的系数，方向值
 def eval_sh(deg, sh, dirs):
     """
     Evaluate spherical harmonics at unit directions
@@ -68,17 +70,22 @@ def eval_sh(deg, sh, dirs):
         [..., C]
     """
     assert deg <= 4 and deg >= 0
+    # 计算球谐函数的系数数量
     coeff = (deg + 1) ** 2
+    # 看球谐函数的数量满不满足要求的系数数量
     assert sh.shape[-1] >= coeff
 
+    # 计算球谐函数的实际值
+    # c0就是零阶时的基函数，基函数乘sh就可以得到球谐函数的最终结果
     result = C0 * sh[..., 0]
     if deg > 0:
         x, y, z = dirs[..., 0:1], dirs[..., 1:2], dirs[..., 2:3]
         result = (result -
+                # c1* y就是Y上标1的这一阶，再乘对应的sh1
                 C1 * y * sh[..., 1] +
                 C1 * z * sh[..., 2] -
                 C1 * x * sh[..., 3])
-
+        # 二阶球谐函数，就是大于1时的值
         if deg > 1:
             xx, yy, zz = x * x, y * y, z * z
             xy, yz, xz = x * y, y * z, x * z
@@ -112,6 +119,7 @@ def eval_sh(deg, sh, dirs):
     return result
 
 def RGB2SH(rgb):
+    # C0是直流分量的系数，RGB本来是0~1，转成-0.5~0.5，从而规定到球谐函数要求的范围之内
     return (rgb - 0.5) / C0
 
 def SH2RGB(sh):
