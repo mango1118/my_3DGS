@@ -26,38 +26,60 @@ class GaussianModel:
     def setup_functions(self):
         # 从缩放旋转因子里构建协方差矩阵
         def build_covariance_from_scaling_rotation(scaling, scaling_modifier, rotation):
-            # 创建L矩阵
+            # 旋转乘缩放，得到高斯椭球的变化，得到L矩阵
             L = build_scaling_rotation(scaling_modifier * scaling, rotation)
+            # L乘L第一维和第二维的转置，第零维是高斯数量，所以跳过
+            # 构建出真实的协方差矩阵
             actual_covariance = L @ L.transpose(1, 2)
+            # 只保留上三角，因为是对称矩阵
             symm = strip_symmetric(actual_covariance)
             return symm
-        
+
+        # 定义激活函数，缩放因子的激活函数就是exp
         self.scaling_activation = torch.exp
+        # 对应缩放因子的反激活函数是log
         self.scaling_inverse_activation = torch.log
-
+        # 协方差矩阵没用激活函数，因为旋转和缩放都激活过了，所以直接用刚才的方法构造
         self.covariance_activation = build_covariance_from_scaling_rotation
-
+        # 不透明度的激活函数用sigmoid，为了不透明度在0-1之间
         self.opacity_activation = torch.sigmoid
+        # 对应的反函数就是反激活函数
         self.inverse_opacity_activation = inverse_sigmoid
-
+        # 旋转操作的激活函数是归一化函数
         self.rotation_activation = torch.nn.functional.normalize
 
 
+    # 对变量进行初始化，设置成0或者空
     def __init__(self, sh_degree : int):
+        # 球谐函数的阶数
         self.active_sh_degree = 0
-        self.max_sh_degree = sh_degree  
+        # 球谐函数的最高阶数是传进来的
+        self.max_sh_degree = sh_degree
+        # 椭球位置
         self._xyz = torch.empty(0)
+        # 球谐函数的直流分量
         self._features_dc = torch.empty(0)
+        # 球谐函数的高阶分量
         self._features_rest = torch.empty(0)
+        # 缩放因子
         self._scaling = torch.empty(0)
+        # 旋转因子
         self._rotation = torch.empty(0)
+        # 不透明度
         self._opacity = torch.empty(0)
+        # 投影到平面后的二维高斯分布的最大半径
         self.max_radii2D = torch.empty(0)
+        # 点位置的梯度累积值
         self.xyz_gradient_accum = torch.empty(0)
+        # 统计的分母数量，梯度累积值需要除以分母数量来计算每个高斯分布的平均梯度
         self.denom = torch.empty(0)
+        # 优化器
         self.optimizer = None
+        # 百分比目的，做密度控制
         self.percent_dense = 0
+        # 学习率因子
         self.spatial_lr_scale = 0
+        # 创建激活函数的方法
         self.setup_functions()
 
     def capture(self):
@@ -94,6 +116,7 @@ class GaussianModel:
         self.denom = denom
         self.optimizer.load_state_dict(opt_dict)
 
+    # 获取变量时，返回的是激活后的变量，所以需要用反激活函数来把变量提取出来
     @property
     def get_scaling(self):
         return self.scaling_activation(self._scaling)
@@ -119,6 +142,7 @@ class GaussianModel:
     def get_covariance(self, scaling_modifier = 1):
         return self.covariance_activation(self.get_scaling, scaling_modifier, self._rotation)
 
+    # 迭代球谐函数的阶数，如果球谐函数的阶数小于规定的最大阶数，运行这个方法之后阶数就会增加
     def oneupSHdegree(self):
         if self.active_sh_degree < self.max_sh_degree:
             self.active_sh_degree += 1
