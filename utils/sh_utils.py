@@ -55,7 +55,7 @@ C4 = [
     0.6258357354491761,
 ]   
 
-# 球谐函数的计算方式，传入球谐函数的阶数，球谐函数的系数，方向值
+# 球谐函数的计算方式，传入球谐函数的阶数，球谐函数的系数，方向值，得到高斯椭球的颜色
 def eval_sh(deg, sh, dirs):
     """
     Evaluate spherical harmonics at unit directions

@@ -38,11 +38,15 @@ __device__ const float SH_C3[] = {
 	-0.5900435899266435f
 };
 
+// v是原本点的坐标，S是范围值，统一到-s/2到s/2之间，从ndc归一化坐标系到图像平面的限制
 __forceinline__ __device__ float ndc2Pix(float v, int S)
 {
 	return ((v + 1.0) * S - 1.0) * 0.5;
 }
-
+// 传入点，高斯椭球的半径，两个用来处理的变量，对应的栅格
+// 最小值：点减去高斯分布的半径
+// 最大值：点加上高斯分布的半径
+// blockx是取整，点加上半径就得到最右边，点减去半径就得到最左边，同理上下也一样，找到这些位置之后就能画出包围高斯椭球的矩形
 __forceinline__ __device__ void getRect(const float2 p, int max_radius, uint2& rect_min, uint2& rect_max, dim3 grid)
 {
 	rect_min = {
@@ -54,7 +58,7 @@ __forceinline__ __device__ void getRect(const float2 p, int max_radius, uint2& r
 		min(grid.y, max((int)0, (int)((p.y + max_radius + BLOCK_Y - 1) / BLOCK_Y)))
 	};
 }
-
+// 实现了矩阵乘法的功能
 __forceinline__ __device__ float3 transformPoint4x3(const float3& p, const float* matrix)
 {
 	float3 transformed = {
@@ -135,7 +139,7 @@ __forceinline__ __device__ float sigmoid(float x)
 {
 	return 1.0f / (1.0f + expf(-x));
 }
-
+// 线程下标，点的坐标（数组），两个投影矩阵的数组，滤波器的标记值（开发者），要处理的参数（不重要）
 __forceinline__ __device__ bool in_frustum(int idx,
 	const float* orig_points,
 	const float* viewmatrix,
@@ -143,14 +147,21 @@ __forceinline__ __device__ bool in_frustum(int idx,
 	bool prefiltered,
 	float3& p_view)
 {
+	// 提取点的坐标， idx*3就是x，idx*3+1就是y，idx*3+2就是z
 	float3 p_orig = { orig_points[3 * idx], orig_points[3 * idx + 1], orig_points[3 * idx + 2] };
 
 	// Bring points to screen space
+	// 得到齐次坐标
 	float4 p_hom = transformPoint4x4(p_orig, projmatrix);
+
+	// 齐次坐标转三维坐标，没用到
 	float p_w = 1.0f / (p_hom.w + 0.0000001f);
 	float3 p_proj = { p_hom.x * p_w, p_hom.y * p_w, p_hom.z * p_w };
+
+	// 相机坐标系中的三维点
 	p_view = transformPoint4x3(p_orig, viewmatrix);
 
+	// 判断相机坐标系内的三维点是否在视锥内
 	if (p_view.z <= 0.2f)// || ((p_proj.x < -1.3 || p_proj.x > 1.3 || p_proj.y < -1.3 || p_proj.y > 1.3)))
 	{
 		if (prefiltered)
