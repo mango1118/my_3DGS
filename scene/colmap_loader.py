@@ -13,14 +13,19 @@ import numpy as np
 import collections
 import struct
 
+# 定义相机模型，包含模型ID、模型名称和参数数量
 CameraModel = collections.namedtuple(
     "CameraModel", ["model_id", "model_name", "num_params"])
-Camera = collections.namedtuple(
+# 定义相机数据结构，包括相机的ID、模型、宽度、高度和参数
+Camera = collections.namedtuple(s
     "Camera", ["id", "model", "width", "height", "params"])
+# 定义图像数据结构，包括ID、旋转四元数、平移向量、相机ID、图像名称等
 BaseImage = collections.namedtuple(
     "Image", ["id", "qvec", "tvec", "camera_id", "name", "xys", "point3D_ids"])
+# 定义3D点数据结构，包括点的ID、坐标、颜色、误差、影像ID和2D点索引
 Point3D = collections.namedtuple(
     "Point3D", ["id", "xyz", "rgb", "error", "image_ids", "point2D_idxs"])
+# 相机模型集合
 CAMERA_MODELS = {
     CameraModel(model_id=0, model_name="SIMPLE_PINHOLE", num_params=3),
     CameraModel(model_id=1, model_name="PINHOLE", num_params=4),
@@ -34,6 +39,7 @@ CAMERA_MODELS = {
     CameraModel(model_id=9, model_name="RADIAL_FISHEYE", num_params=5),
     CameraModel(model_id=10, model_name="THIN_PRISM_FISHEYE", num_params=12)
 }
+# 通过模型ID和名称建立快速查找的字典
 CAMERA_MODEL_IDS = dict([(camera_model.model_id, camera_model)
                          for camera_model in CAMERA_MODELS])
 CAMERA_MODEL_NAMES = dict([(camera_model.model_name, camera_model)
@@ -41,6 +47,7 @@ CAMERA_MODEL_NAMES = dict([(camera_model.model_name, camera_model)
 
 
 def qvec2rotmat(qvec):
+    # 将四元数转换为旋转矩阵
     return np.array([
         [1 - 2 * qvec[2]**2 - 2 * qvec[3]**2,
          2 * qvec[1] * qvec[2] - 2 * qvec[0] * qvec[3],
@@ -53,6 +60,7 @@ def qvec2rotmat(qvec):
          1 - 2 * qvec[1]**2 - 2 * qvec[2]**2]])
 
 def rotmat2qvec(R):
+    # 将旋转矩阵转换为四元数
     Rxx, Ryx, Rzx, Rxy, Ryy, Rzy, Rxz, Ryz, Rzz = R.flat
     K = np.array([
         [Rxx - Ryy - Rzz, 0, 0, 0],
@@ -66,10 +74,18 @@ def rotmat2qvec(R):
     return qvec
 
 class Image(BaseImage):
+    # 图像类，扩展基本图像数据结构，添加方法将四元数转换为旋转矩阵
     def qvec2rotmat(self):
         return qvec2rotmat(self.qvec)
 
 def read_next_bytes(fid, num_bytes, format_char_sequence, endian_character="<"):
+    """从二进制文件中读取并解包接下来的字节。
+    :param fid: 文件对象
+    :param num_bytes: 字节总数
+    :param format_char_sequence: 格式化字符序列
+    :param endian_character: 字节顺序字符
+    :return: 解包后的值组成的元组。
+    """
     """Read and unpack the next bytes from a binary file.
     :param fid:
     :param num_bytes: Sum of combination of {2, 4, 8}, e.g. 2, 6, 16, 30, etc.
@@ -81,6 +97,12 @@ def read_next_bytes(fid, num_bytes, format_char_sequence, endian_character="<"):
     return struct.unpack(endian_character + format_char_sequence, data)
 
 def read_points3D_text(path):
+    """
+    从文本文件中读取3D点。
+    see: src/base/reconstruction.cc
+        void Reconstruction::ReadPoints3DText(const std::string& path)
+        void Reconstruction::WritePoints3DText(const std::string& path)
+    """
     """
     see: src/base/reconstruction.cc
         void Reconstruction::ReadPoints3DText(const std::string& path)
@@ -128,7 +150,12 @@ def read_points3D_binary(path_to_model_file):
         void Reconstruction::ReadPoints3DBinary(const std::string& path)
         void Reconstruction::WritePoints3DBinary(const std::string& path)
     """
-
+    """
+    从二进制文件中读取3D点。
+    see: src/base/reconstruction.cc
+        void Reconstruction::ReadPoints3DBinary(const std::string& path)
+        void Reconstruction::WritePoints3DBinary(const std::string& path)
+    """
 
     with open(path_to_model_file, "rb") as fid:
         num_points = read_next_bytes(fid, 8, "Q")[0]

@@ -24,26 +24,30 @@ from utils.sh_utils import SH2RGB
 from scene.gaussian_model import BasicPointCloud
 
 class CameraInfo(NamedTuple):
-    uid: int
-    R: np.array
-    T: np.array
-    FovY: np.array
-    FovX: np.array
-    image: np.array
-    image_path: str
-    image_name: str
-    width: int
-    height: int
+    # 相机信息数据结构，用于存储单个相机的详细参数
+    uid: int         # 相机唯一标识符
+    R: np.array      # 旋转矩阵
+    T: np.array      # 平移向量
+    FovY: np.array   # 垂直视角
+    FovX: np.array   # 水平视角
+    image: np.array  # 图像数据
+    image_path: str  # 图像文件路径
+    image_name: str  # 图像文件名
+    width: int       # 图像宽度
+    height: int      # 图像高度
 
 class SceneInfo(NamedTuple):
-    point_cloud: BasicPointCloud
-    train_cameras: list
-    test_cameras: list
-    nerf_normalization: dict
-    ply_path: str
+    # 场景信息数据结构，用于存储场景的详细参数和数据
+    point_cloud: BasicPointCloud  # 点云数据
+    train_cameras: list           # 训练用相机列表
+    test_cameras: list            # 测试用相机列表
+    nerf_normalization: dict      # 用于归一化的参数
+    ply_path: str                 # 点云文件路径
 
 def getNerfppNorm(cam_info):
+    # 根据相机信息计算场景的归一化参数
     def get_center_and_diag(cam_centers):
+        # 计算相机中心的平均位置和最大距离
         cam_centers = np.hstack(cam_centers)
         avg_cam_center = np.mean(cam_centers, axis=1, keepdims=True)
         center = avg_cam_center
@@ -54,23 +58,23 @@ def getNerfppNorm(cam_info):
     cam_centers = []
 
     for cam in cam_info:
-        W2C = getWorld2View2(cam.R, cam.T)
-        C2W = np.linalg.inv(W2C)
-        cam_centers.append(C2W[:3, 3:4])
+        W2C = getWorld2View2(cam.R, cam.T)  # 从世界坐标到相机坐标的变换矩阵
+        C2W = np.linalg.inv(W2C)            # 从相机坐标到世界坐标的变换矩阵
+        cam_centers.append(C2W[:3, 3:4])    # 记录相机位置
 
     center, diagonal = get_center_and_diag(cam_centers)
-    radius = diagonal * 1.1
+    radius = diagonal * 1.1               # 计算包围半径，稍微放大以确保所有数据在范围内
 
-    translate = -center
+    translate = -center                    # 计算需要的平移量，以便将数据中心移到原点
 
     return {"translate": translate, "radius": radius}
 
 def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
+    # 从COLMAP的数据文件中读取相机信息
     cam_infos = []
     for idx, key in enumerate(cam_extrinsics):
         sys.stdout.write('\r')
-        # the exact output you're looking for:
-        sys.stdout.write("Reading camera {}/{}".format(idx+1, len(cam_extrinsics)))
+        sys.stdout.write("Reading camera {}/{}".format(idx+1, len(cam_extrinsics)))  # 显示读取进度
         sys.stdout.flush()
 
         extr = cam_extrinsics[key]
@@ -79,9 +83,10 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
         width = intr.width
 
         uid = intr.id
-        R = np.transpose(qvec2rotmat(extr.qvec))
-        T = np.array(extr.tvec)
+        R = np.transpose(qvec2rotmat(extr.qvec))  # 从四元数转换为旋转矩阵并转置
+        T = np.array(extr.tvec)                  # 平移向量
 
+        # 根据相机模型计算视场角
         if intr.model=="SIMPLE_PINHOLE":
             focal_length_x = intr.params[0]
             FovY = focal2fov(focal_length_x, height)
@@ -94,9 +99,9 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
         else:
             assert False, "Colmap camera model not handled: only undistorted datasets (PINHOLE or SIMPLE_PINHOLE cameras) supported!"
 
-        image_path = os.path.join(images_folder, os.path.basename(extr.name))
-        image_name = os.path.basename(image_path).split(".")[0]
-        image = Image.open(image_path)
+        image_path = os.path.join(images_folder, os.path.basename(extr.name))  # 图像文件路径
+        image_name = os.path.basename(image_path).split(".")[0]                # 图像文件名
+        image = Image.open(image_path)                                         # 加载图像
 
         cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                               image_path=image_path, image_name=image_name, width=width, height=height)
@@ -105,6 +110,7 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
     return cam_infos
 
 def fetchPly(path):
+    # 从PLY文件中读取点云数据
     plydata = PlyData.read(path)
     vertices = plydata['vertex']
     positions = np.vstack([vertices['x'], vertices['y'], vertices['z']]).T
@@ -114,11 +120,12 @@ def fetchPly(path):
 
 def storePly(path, xyz, rgb):
     # Define the dtype for the structured array
-    dtype = [('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
+    # 存储点云数据到PLY文件
+    dtype = [('x', 'f4'), ('y', 'f4'), ('z', 'f4'),  # 定义数据结构
             ('nx', 'f4'), ('ny', 'f4'), ('nz', 'f4'),
             ('red', 'u1'), ('green', 'u1'), ('blue', 'u1')]
     
-    normals = np.zeros_like(xyz)
+    normals = np.zeros_like(xyz)  # 默认所有点的法线为0
 
     elements = np.empty(xyz.shape[0], dtype=dtype)
     attributes = np.concatenate((xyz, normals, rgb), axis=1)
@@ -130,6 +137,7 @@ def storePly(path, xyz, rgb):
     ply_data.write(path)
 
 def readColmapSceneInfo(path, images, eval, llffhold=8):
+    # 读取Colmap场景信息
     try:
         cameras_extrinsic_file = os.path.join(path, "sparse/0", "images.bin")
         cameras_intrinsic_file = os.path.join(path, "sparse/0", "cameras.bin")
@@ -177,6 +185,7 @@ def readColmapSceneInfo(path, images, eval, llffhold=8):
     return scene_info
 
 def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png"):
+    # 从转换文件中读取相机配置
     cam_infos = []
 
     with open(os.path.join(path, transformsfile)) as json_file:
@@ -219,6 +228,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
     return cam_infos
 
 def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
+    # 读取合成NeRF场景信息
     print("Reading Training Transforms")
     train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension)
     print("Reading Test Transforms")
