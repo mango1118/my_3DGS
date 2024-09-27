@@ -26,7 +26,7 @@ class GaussianModel:
     def setup_functions(self):
         # 从缩放旋转因子里构建协方差矩阵
         def build_covariance_from_scaling_rotation(scaling, scaling_modifier, rotation):
-            # 旋转乘缩放，得到高斯椭球的变化，得到L矩阵
+            # 旋转矩阵乘缩放矩阵，得到高斯椭球的变化，得到L矩阵
             L = build_scaling_rotation(scaling_modifier * scaling, rotation)
             # L乘L第一维和第二维的转置，第零维是高斯数量，所以跳过
             # 构建出真实的协方差矩阵
