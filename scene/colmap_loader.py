@@ -17,7 +17,7 @@ import struct
 CameraModel = collections.namedtuple(
     "CameraModel", ["model_id", "model_name", "num_params"])
 # 定义相机数据结构，包括相机的ID、模型、宽度、高度和参数
-Camera = collections.namedtuple(s
+Camera = collections.namedtuple(
     "Camera", ["id", "model", "width", "height", "params"])
 # 定义图像数据结构，包括ID、旋转四元数、平移向量、相机ID、图像名称等
 BaseImage = collections.namedtuple(
